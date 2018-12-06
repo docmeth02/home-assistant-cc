@@ -240,7 +240,7 @@ class SygonixBTThermostat(ClimateDevice):
     @property
     def target_temperature(self):
         """Return the temperature we try to reach."""
-        return self._target.target_temp
+        return self._current.target_temp
 
     def set_temperature(self, **kwargs):
         """Set new target temperature."""
