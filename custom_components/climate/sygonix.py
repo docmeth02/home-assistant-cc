@@ -11,6 +11,7 @@ https://home-assistant.io/components/climate.sygonix/
 import logging
 import asyncio
 import json
+import copy
 
 from datetime import (timedelta, datetime)
 
@@ -369,25 +370,31 @@ class SygonixBTThermostat(ClimateDevice):
 
         _LOGGER.info("Update called {}".format(self._mac))
         # send update request
-        cmds = { 'tries': 5,
+        cmds_connect = { 'tries': 5,
                  'commands': [
                     { 'action': 'writeCharacteristic', 'uuid': UUID_PIN, 'value': [ int(x) for x in self._pin.to_bytes(4, byteorder = 'little') ] },
                   ]
                }
+        
+        cmds_set = copy.deepcopy(cmds_connect)
+
         if self._current.mode_code != self._target.mode_code and self._target.manual is not None:
-            cmds['commands'].append({ 'action': 'writeCharacteristic', 'uuid': UUID_MODE, 'value': [ self._target.mode_value, 0, 0 ] })
+            cmds_set['commands'].append({ 'action': 'writeCharacteristic', 'uuid': UUID_MODE, 'value': [ self._target.mode_value, 0, 0 ] })
 
         if self._current.target_temp != self._target.target_temp and self._target.target_temp is not None:
-            cmds['commands'].append({ 'action': 'writeCharacteristic', 'uuid': UUID_TEMP, 'value': [ 128, int(self._target.target_temp * 2), 128, 128, 128, 128, 128 ] })
+            cmds_set['commands'].append({ 'action': 'writeCharacteristic', 'uuid': UUID_TEMP, 'value': [ 128, int(self._target.target_temp * 2), 128, 128, 128, 128, 128 ] })
 
-        if len(cmds['commands']) > 1:
-            cmds['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_MODE })
-            cmds['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_TEMP })
-            cmds['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_BATTERY })
+        if len(cmds_set['commands']) > 1:
+            mqtt.publish(self.hass, 'ble/{}/commands'.format(self._mac), json.dumps(cmds_set), 1, False)
+
+            cmds_get = copy.deepcopy(cmds_connect)
+            cmds_get['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_MODE })
+            cmds_get['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_TEMP })
+            cmds_get['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_BATTERY })
             if self._current.model_no is None:
-                cmds['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_MODEL })
-                cmds['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_FIRMWARE })
-                cmds['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_SOFTWARE })
-                cmds['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_MANU })
+                cmds_get['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_MODEL })
+                cmds_get['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_FIRMWARE })
+                cmds_get['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_SOFTWARE })
+                cmds_get['commands'].append({ 'action': 'readCharacteristic', 'uuid': UUID_MANU })
 
-            mqtt.publish(self.hass, 'ble/{}/commands'.format(self._mac), json.dumps(cmds), 1, False)
+            mqtt.publish(self.hass, 'ble/{}/commands'.format(self._mac), json.dumps(cmds_get), 1, False)
