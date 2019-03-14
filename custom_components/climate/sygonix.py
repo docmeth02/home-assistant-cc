@@ -20,9 +20,12 @@ import voluptuous as vol
 from homeassistant.components.climate import (
     ClimateDevice,
     PLATFORM_SCHEMA,
+)
+
+from homeassistant.components.climate.const import (
     STATE_AUTO,
-    STATE_ON,
-    STATE_OFF,
+    STATE_HEAT,
+    STATE_IDLE,
     SUPPORT_TARGET_TEMPERATURE,
     SUPPORT_OPERATION_MODE,
 )
@@ -32,6 +35,7 @@ from homeassistant.const import (
     CONF_PIN,
     TEMP_CELSIUS,
     CONF_DEVICES,
+    CONF_OFFSET,
     PRECISION_HALVES,
     ATTR_TEMPERATURE)
 
@@ -75,6 +79,7 @@ SCAN_INTERVAL = timedelta(seconds=300)
 DEVICE_SCHEMA = vol.Schema({
     vol.Required(CONF_MAC): cv.string,
     vol.Optional(CONF_PIN, default=0): cv.positive_int,
+    vol.Optional(CONF_OFFSET, default=0.0): vol.Coerce(float),
 })
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
@@ -88,7 +93,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     devices = []
 
     for name, device_cfg in config[CONF_DEVICES].items():
-        devices.append(SygonixBTThermostat(device_cfg[CONF_MAC], device_cfg[CONF_PIN], name))
+        devices.append(SygonixBTThermostat(device_cfg[CONF_MAC], device_cfg[CONF_PIN], name, device_cfg[CONF_OFFSET]))
 
     add_devices(devices)
 
@@ -198,7 +203,7 @@ class SygonixState():
 class SygonixBTThermostat(ClimateDevice):
     """Representation of a Sygonix-compatible Bluetooth thermostat."""
 
-    def __init__(self, mac, pin, name):
+    def __init__(self, mac, pin, name, offset):
         """Initialize the thermostat."""
         self.modes = [ STATE_AUTO, STATE_AUTO_LOCKED, STATE_MANUAL, STATE_MANUAL_LOCKED ]
 
@@ -207,6 +212,7 @@ class SygonixBTThermostat(ClimateDevice):
         self._pin = pin
         self._current = SygonixState()
         self._target = SygonixState()
+        self._offset = offset
 
     @property
     def available(self) -> bool:
@@ -236,6 +242,8 @@ class SygonixBTThermostat(ClimateDevice):
     @property
     def current_temperature(self):
         """Return current temperature."""
+        if self._current.temperature:
+            return float(self._current.temperature) + self._offset
         return self._current.temperature
 
     @property
